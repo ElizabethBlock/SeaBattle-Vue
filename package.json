@@ -1,0 +1,18 @@
+{
+  "name": "sea-battle-game",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "node server/server.cjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "^6.0.3",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3",
+    "vite": "^6.0.5",
+    "vue": "^3.5.13"
+  }
+}
