@@ -5,7 +5,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "vite client",
     "build": "vite build client",
     "start": "node server/server.cjs"
   },

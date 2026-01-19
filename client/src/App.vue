@@ -3,8 +3,12 @@ import { ref, onMounted } from 'vue'; // імпортую шнструменти
 import { io } from "socket.io-client"; // імпортую бібліотеку socket.io-client. io - функція для підключення до сервера з швидкою WebSocket-підтримкою (живий зв'язок)
 import { generateShips } from './shipGenerator'; // імпортую генератор кораблів зі свого файлу
 
-const socket = io({
-  transports: ['websocket', 'polling'], // Дозволяємо всі види з'єднання
+// Визначаємо, де ми: вдома чи в інтернеті?
+// Якщо в адресному рядку є "localhost", значить ми вдома.
+const isLocal = window.location.hostname === 'localhost';
+
+const socket = io(isLocal ? 'http://localhost:4000' : undefined, {
+  transports: ['websocket', 'polling'],
   reconnection: true
 });
 
@@ -17,7 +21,24 @@ const isReady = ref(false); // чи натиснула я кнопку 'гото
 const winner = ref(null); // null, 'ME', 'ENEMY'
 // const socket = io();  підключення до сервера (тут IP мого локального сервера)
 const createEmptyBoard = () => Array(10).fill().map(() => Array(10).fill(0)); // функція створення сітки 10х10. Масив масивів, поки що заповнених нулями
+// --- АУДІО СИСТЕМА ---
+const audioFiles = {
+  useron: new Audio('/sounds/user-on.mp3'),
+  miss: new Audio('/sounds/splash.mp3'),
+  hit: new Audio('/sounds/boom.mp3'),
+  win: new Audio('/sounds/win.mp3'),
+  lose: new Audio('/sounds/lose.mp3'),
+  start: new Audio('/sounds/start.mp3') // (опціонально)
+};
 
+// Функція для програвання
+const playSound = (name) => {
+  const sound = audioFiles[name];
+  if (sound) {
+    sound.currentTime = 0; // Перемотати на початок (якщо звук ще грає)
+    sound.play().catch(err => console.log("Браузер заблокував звук:", err));
+  }
+};
 // створюю порожні ігрові поля
 playerBoard.value = createEmptyBoard();
 enemyBoard.value = createEmptyBoard();
@@ -55,6 +76,7 @@ onMounted(() => {
 
     if (isMyTurn.value) {
       status.value = "Бій почався! Твій хід!";
+      playSound('user-on')
     } else {
       status.value = "Бій почався! Хід суперника.";
     }
@@ -70,28 +92,33 @@ onMounted(() => {
         enemyBoard.value[coord.y][coord.x] = 4; // 4 = KILLED
       });
       status.value = "КОРАБЕЛЬ ЗНИЩЕНО! Стріляй ще!";
+      playSound('hit');
     }
     else if (result === 'hit') {
       // Звичайне влучання
       enemyBoard.value[y][x] = 2; // 2 = HIT
       status.value = "Влучила! Стріляй ще!";
+      playSound('hit');
     }
     else {
       // Промах
       enemyBoard.value[y][x] = 3; // 3 = MISS
       status.value = "Промах...";
+      playSound('miss');
     }
   });
 
   // Коли стріляє ВОРОГ по мені
   socket.on('enemy-fire', ({ x, y, result, sunkCoords }) => {
     if (result === 'killed') {
+      playSound('hit');
       // Якщо ворог добив мій корабель - закреслюємо його у себе
       sunkCoords.forEach(coord => {
         playerBoard.value[coord.y][coord.x] = 4;
       });
     } else {
       playerBoard.value[y][x] = (result === 'hit') ? 2 : 3;
+      playSound('miss');
     }
   });
 
@@ -107,9 +134,11 @@ onMounted(() => {
     if (data.winner === socket.id) {
       winner.value = 'ME';
       status.value = "ПЕРЕМОГА!";
+      playSound('win');
     } else {
       winner.value = 'ENEMY';
       status.value = "ТИ ПРОГРАЛА...";
+      playSound('lose');
     }
   });
 });
