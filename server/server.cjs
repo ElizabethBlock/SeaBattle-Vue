@@ -27,7 +27,7 @@ console.log("--- SOCKET.IO SETUP DONE ---"); // 3. Сокети готові
 // (Обов'язково залиш тут свою логіку гри, я її скоротив для зручності)
 // ...
 
-app.get('*', (req, res) => {
+app.get('/.*/', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
