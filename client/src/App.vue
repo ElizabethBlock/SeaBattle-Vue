@@ -3,6 +3,11 @@ import { ref, onMounted } from 'vue'; // імпортую шнструменти
 import { io } from "socket.io-client"; // імпортую бібліотеку socket.io-client. io - функція для підключення до сервера з швидкою WebSocket-підтримкою (живий зв'язок)
 import { generateShips } from './shipGenerator'; // імпортую генератор кораблів зі свого файлу
 
+const socket = io({
+  transports: ['websocket', 'polling'], // Дозволяємо всі види з'єднання
+  reconnection: true
+});
+
 const status = ref('Підключення...');
 const gameStage = ref('waiting'); // спочатку показує waiting -> setup -> playing -> finished
 const playerBoard = ref([]); // моя карта бою з порожніми масивами
@@ -10,7 +15,7 @@ const enemyBoard = ref([]); // ворожа карта бою з порожні�
 const isMyTurn = ref(false); // показує, чи мій зараз хід
 const isReady = ref(false); // чи натиснула я кнопку 'готовий'
 const winner = ref(null); // null, 'ME', 'ENEMY'
-const socket = io(); // підключення до сервера (тут IP мого локального сервера)
+// const socket = io();  підключення до сервера (тут IP мого локального сервера)
 const createEmptyBoard = () => Array(10).fill().map(() => Array(10).fill(0)); // функція створення сітки 10х10. Масив масивів, поки що заповнених нулями
 
 // створюю порожні ігрові поля
@@ -18,6 +23,23 @@ playerBoard.value = createEmptyBoard();
 enemyBoard.value = createEmptyBoard();
 
 onMounted(() => {
+
+  // Якщо з'єднання пройшло успішно
+  socket.on('connect', () => {
+    console.log("Успішне з'єднання з ID:", socket.id);
+    // Якщо сервер мовчить, ми хоча б знаємо, що з'єдналися
+    if (status.value.includes('помилка')) {
+      status.value = "З'єднано! Чекаємо на дані гри...";
+    }
+  });
+
+  // Якщо сталася помилка з'єднання (найважливіше!)
+  socket.on('connect_error', (err) => {
+    console.error("Помилка з'єднання:", err);
+    status.value = "Помилка з'єднання: " + err.message;
+  });
+
+
   socket.on('status-update', (msg) => status.value = msg);
 
   // Етап розстановки
