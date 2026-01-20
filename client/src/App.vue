@@ -29,7 +29,8 @@ const audioFiles = {
   win: new Audio('/sounds/win.mp3'),
   lose: new Audio('/sounds/lose.mp3'),
   allShip: new Audio('/sounds/all-ship.mp3'),
-  start: new Audio('/sounds/startGame.mp3')
+  startGameMyTurn: new Audio('/sounds/startGameMyTurn.mp3'), // є
+  startGameOpponentTurn: new Audio('/sounds/startGameOpponentTurn.mp3') // є
 };
 
 // Функція для програвання
@@ -50,6 +51,7 @@ onMounted(() => {
   socket.on('connect', () => {
     console.log("Успішне з'єднання з ID:", socket.id);
 
+
     // Якщо сервер мовчить, ми хоча б знаємо, що з'єдналися
     if (status.value.includes('помилка')) {
       status.value = "З'єднано! Чекаємо на дані гри...";
@@ -69,6 +71,7 @@ onMounted(() => {
   socket.on('setup-phase', () => {
     gameStage.value = 'setup';
     randomizeShips(); // Одразу даємо випадкову карту
+    playSound('useron');
   });
 
   // Етап гри
@@ -78,9 +81,10 @@ onMounted(() => {
 
     if (isMyTurn.value) {
       status.value = "Бій почався! Твій хід!";
-      playSound('start')
+      playSound('startGameMyTurn');
     } else {
       status.value = "Бій почався! Хід суперника.";
+      playSound('startGameOpponentTurn');
     }
   });
 
@@ -95,7 +99,7 @@ onMounted(() => {
         playSound('allShip');
       });
       status.value = "КОРАБЕЛЬ ЗНИЩЕНО! Стріляй ще!";
-      playSound('hit');
+      // playSound('hit');
     }
     else if (result === 'hit') {
       // Звичайне влучання
