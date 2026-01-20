@@ -5,9 +5,28 @@ import { generateShips } from './shipGenerator'; // імпортую генер�
 
 // Визначаємо, де ми: вдома чи в інтернеті?
 // Якщо в адресному рядку є "localhost", значить ми вдома.
-const isLocal = window.location.hostname === 'localhost';
+// const isLocal = window.location.hostname === 'localhost';
 
-const socket = io(isLocal ? 'http://localhost:4000' : undefined, {
+// const socket = io(isLocal ? 'http://localhost:4000' : undefined, {
+//   transports: ['websocket', 'polling'],
+//   reconnection: true
+// });
+
+
+// --- УНІВЕРСАЛЬНЕ ПІДКЛЮЧЕННЯ ---
+// 1. Отримуємо адресу, на якій відкрито сайт (localhost, 192.168.x.x або onrender.com)
+const hostname = window.location.hostname;
+const protocol = window.location.protocol;
+
+// 2. Перевіряємо, чи ми на Render (у продакшні)
+const isProduction = hostname.includes('onrender.com');
+
+// 3. Формуємо адресу для Socket.io
+// Якщо Render -> undefined (автоматично).
+// Якщо дім (Wi-Fi/Localhost) -> беремо ТОЙ САМИЙ IP, але стукаємо в порт 4000.
+const socketUrl = isProduction ? undefined : `${protocol}//${hostname}:4000`;
+
+const socket = io(socketUrl, {
   transports: ['websocket', 'polling'],
   reconnection: true
 });
@@ -23,14 +42,14 @@ const winner = ref(null); // null, 'ME', 'ENEMY'
 const createEmptyBoard = () => Array(10).fill().map(() => Array(10).fill(0)); // функція створення сітки 10х10. Масив масивів, поки що заповнених нулями
 // --- АУДІО СИСТЕМА ---
 const audioFiles = {
-  useron: new Audio('/sounds/user-on.mp3'),
-  miss: new Audio('/sounds/splash.mp3'),
-  hit: new Audio('/sounds/boom.mp3'),
+  useron: new Audio('/sounds/userOn.mp3'),
+  go: new Audio('/sounds/go.mp3'),
+  miss: new Audio('/sounds/miss.mp3'),
+  hit: new Audio('/sounds/hit.mp3'),
   win: new Audio('/sounds/win.mp3'),
   lose: new Audio('/sounds/lose.mp3'),
-  allShip: new Audio('/sounds/all-ship.mp3'),
-  startGameMyTurn: new Audio('/sounds/startGameMyTurn.mp3'), // є
-  startGameOpponentTurn: new Audio('/sounds/startGameOpponentTurn.mp3') // є
+  mix: new Audio('/sounds/mix.mp3'),
+  allShip: new Audio('/sounds/allShip.mp3'),
 };
 
 // Функція для програвання
@@ -41,6 +60,28 @@ const playSound = (name) => {
     sound.play().catch(err => console.log("Браузер заблокував звук:", err));
   }
 };
+
+// Функція для автоматичного зафарбовування клітинок навколо вбитого корабля
+const markSurrounding = (board, sunkCoords) => {
+  sunkCoords.forEach(coord => {
+    // Перебираємо всі 8 клітинок навколо кожної палуби
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const ny = coord.y + dy;
+        const nx = coord.x + dx;
+
+        // Перевіряємо, щоб не вилізти за межі карти (0-9)
+        if (ny >= 0 && ny < 10 && nx >= 0 && nx < 10) {
+          // Якщо клітинка порожня (0) — ставимо "промах" (3)
+          // Ми не чіпаємо сам корабель (там буде 4) або вже стріляні клітинки
+          if (board[ny][nx] === 0) {
+            board[ny][nx] = 3;
+          }
+        }
+      }
+    }
+  });
+};
 // створюю порожні ігрові поля
 playerBoard.value = createEmptyBoard();
 enemyBoard.value = createEmptyBoard();
@@ -50,7 +91,6 @@ onMounted(() => {
   // Якщо з'єднання пройшло успішно
   socket.on('connect', () => {
     console.log("Успішне з'єднання з ID:", socket.id);
-
 
     // Якщо сервер мовчить, ми хоча б знаємо, що з'єдналися
     if (status.value.includes('помилка')) {
@@ -70,8 +110,8 @@ onMounted(() => {
   // Етап розстановки
   socket.on('setup-phase', () => {
     gameStage.value = 'setup';
-    randomizeShips(); // Одразу даємо випадкову карту
     playSound('useron');
+    randomizeShips(true); // Одразу даємо випадкову карту
   });
 
   // Етап гри
@@ -81,10 +121,8 @@ onMounted(() => {
 
     if (isMyTurn.value) {
       status.value = "Бій почався! Твій хід!";
-      playSound('startGameMyTurn');
     } else {
       status.value = "Бій почався! Хід суперника.";
-      playSound('startGameOpponentTurn');
     }
   });
 
@@ -98,8 +136,8 @@ onMounted(() => {
         enemyBoard.value[coord.y][coord.x] = 4; // 4 = KILLED
         playSound('allShip');
       });
+      markSurrounding(enemyBoard.value, sunkCoords);
       status.value = "КОРАБЕЛЬ ЗНИЩЕНО! Стріляй ще!";
-      // playSound('hit');
     }
     else if (result === 'hit') {
       // Звичайне влучання
@@ -117,15 +155,23 @@ onMounted(() => {
 
   // Коли стріляє ВОРОГ по мені
   socket.on('enemy-fire', ({ x, y, result, sunkCoords }) => {
+    // 1. Якщо корабель ВБИТО
     if (result === 'killed') {
-      playSound('hit');
-      // Якщо ворог добив мій корабель - закреслюємо його у себе
       sunkCoords.forEach(coord => {
         playerBoard.value[coord.y][coord.x] = 4;
       });
-    } else {
-      playerBoard.value[y][x] = (result === 'hit') ? 2 : 3;
-      playSound('miss');
+      markSurrounding(playerBoard.value, sunkCoords);
+      playSound('allShip'); // Звук знищення цілого корабля
+    }
+    // 2. Якщо просто ВЛУЧАННЯ (але корабель ще живий)
+    else if (result === 'hit') {
+      playerBoard.value[y][x] = 2; // Малюємо червоний хрестик
+      playSound('hit');            // <-- ТЕПЕР ТУТ БУДЕ ПРАВИЛЬНИЙ ЗВУК (БУМ!)
+    }
+    // 3. Якщо ПРОМАХ
+    else {
+      playerBoard.value[y][x] = 3; // Малюємо крапку
+      playSound('miss');           // Звук "бульк"
     }
   });
 
@@ -151,9 +197,15 @@ onMounted(() => {
 });
 
 // кнопка 'перемішати кораблі'
-const randomizeShips = () => {
-  if (isReady.value) return; // запобігаємо зміні, якщо вже готова. Якщо прапорець isReady піднято — функція не працює (return)
+// Ми додали параметр (silent = false). За замовчуванням він "брехня", тобто звук БУДЕ.
+const randomizeShips = (silent = false) => {
+  if (isReady.value) return;
   playerBoard.value = generateShips();
+
+  // Граємо звук ТІЛЬКИ якщо нам не наказали мовчати (silent !== true)
+  if (silent !== true) {
+    playSound('mix');
+  }
 };
 
 // кнопка 'готова до бою'
@@ -161,6 +213,7 @@ const confirmShips = () => {
   isReady.value = true;
   status.value = "Чекаю на готовність суперника...";
   socket.emit('player-ready', playerBoard.value); // відправляю на сервер мою карту бою, socket.emit (говоримо серверу)
+  playSound('go');
 };
 
 // функція стрільби по ворожому полю
