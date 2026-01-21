@@ -1,19 +1,9 @@
 <script setup>
-import { ref, onMounted } from 'vue'; // імпортую шнструменти з Vue. ref - для реактивних змінних, onMounted - для дій при монтуванні компонента
+import { ref, onMounted, watch, nextTick } from 'vue'; // імпортую шнструменти з Vue. ref - для реактивних змінних, onMounted - для дій при монтуванні компонента
 import { io } from "socket.io-client"; // імпортую бібліотеку socket.io-client. io - функція для підключення до сервера з швидкою WebSocket-підтримкою (живий зв'язок)
 import { generateShips } from './shipGenerator'; // імпортую генератор кораблів зі свого файлу
 
-// Визначаємо, де ми: вдома чи в інтернеті?
-// Якщо в адресному рядку є "localhost", значить ми вдома.
-// const isLocal = window.location.hostname === 'localhost';
-
-// const socket = io(isLocal ? 'http://localhost:4000' : undefined, {
-//   transports: ['websocket', 'polling'],
-//   reconnection: true
-// });
-
-
-// --- УНІВЕРСАЛЬНЕ ПІДКЛЮЧЕННЯ ---
+// підключення до локального сервера і до хостингу Render.com
 // 1. Отримуємо адресу, на якій відкрито сайт (localhost, 192.168.x.x або onrender.com)
 const hostname = window.location.hostname;
 const protocol = window.location.protocol;
@@ -22,14 +12,29 @@ const protocol = window.location.protocol;
 const isProduction = hostname.includes('onrender.com');
 
 // 3. Формуємо адресу для Socket.io
-// Якщо Render -> undefined (автоматично).
-// Якщо дім (Wi-Fi/Localhost) -> беремо ТОЙ САМИЙ IP, але стукаємо в порт 4000.
+// Якщо render -> undefined (автоматично)
+// Якщо дім (Wi-Fi/Localhost) -> беремо ТОЙ САМИЙ IP, але стукаємо в порт 4000
 const socketUrl = isProduction ? undefined : `${protocol}//${hostname}:4000`;
 
 const socket = io(socketUrl, {
   transports: ['websocket', 'polling'],
   reconnection: true
 });
+
+// --- ЧАТ ---
+const chatMessages = ref([]); // Тут зберігаємо історію
+const newMessage = ref('');   // Тут текст, який ми пишемо
+const chatWindowRef = ref(null);
+
+const sendMessage = () => {
+  if (newMessage.value.trim() === '') return; // Не відправляємо порожній текст
+
+  // Відправляємо на сервер
+  socket.emit('chat-message', newMessage.value);
+  playSound('accept'); // Звук відправки повідомлення
+
+  newMessage.value = ''; // Очищаємо поле вводу
+};
 
 const status = ref('Підключення...');
 const gameStage = ref('waiting'); // спочатку показує waiting -> setup -> playing -> finished
@@ -40,7 +45,6 @@ const isReady = ref(false); // чи натиснула я кнопку 'гото
 const winner = ref(null); // null, 'ME', 'ENEMY'
 // const socket = io();  підключення до сервера (тут IP мого локального сервера)
 const createEmptyBoard = () => Array(10).fill().map(() => Array(10).fill(0)); // функція створення сітки 10х10. Масив масивів, поки що заповнених нулями
-// --- АУДІО СИСТЕМА ---
 const audioFiles = {
   useron: new Audio('/sounds/userOn.mp3'),
   go: new Audio('/sounds/go.mp3'),
@@ -50,18 +54,30 @@ const audioFiles = {
   lose: new Audio('/sounds/lose.mp3'),
   mix: new Audio('/sounds/mix.mp3'),
   allShip: new Audio('/sounds/allShip.mp3'),
+  sent: new Audio('/sounds/sent.mp3'),
+  accept: new Audio('/sounds/accept.mp3'),
 };
 
-// Функція для програвання
+watch(chatMessages, async () => {
+  // Чекаємо, поки Vue оновить DOM (намалює нове повідомлення)
+  await nextTick();
+
+  // Якщо вікно існує — крутимо його в самий низ
+  if (chatWindowRef.value) {
+    chatWindowRef.value.scrollTop = chatWindowRef.value.scrollHeight;
+  }
+}, { deep: true });
+
+// функція для програвання
 const playSound = (name) => {
   const sound = audioFiles[name];
   if (sound) {
-    sound.currentTime = 0; // Перемотати на початок (якщо звук ще грає)
+    sound.currentTime = 0; // перемотати на початок (якщо звук ще грає)
     sound.play().catch(err => console.log("Браузер заблокував звук:", err));
   }
 };
 
-// Функція для автоматичного зафарбовування клітинок навколо вбитого корабля
+// функція для автоматичного зафарбовування клітинок навколо вбитого корабля
 const markSurrounding = (board, sunkCoords) => {
   sunkCoords.forEach(coord => {
     // Перебираємо всі 8 клітинок навколо кожної палуби
@@ -87,6 +103,18 @@ playerBoard.value = createEmptyBoard();
 enemyBoard.value = createEmptyBoard();
 
 onMounted(() => {
+
+  // Коли приходить повідомлення чату
+  socket.on('chat-message', ({ text, senderId }) => {
+    chatMessages.value.push({
+      text: text,
+      isMe: senderId === socket.id // Перевіряємо, чи це я написала
+    });
+
+    if (senderId !== socket.id) {
+      playSound('sent');
+    }
+  });
 
   // Якщо з'єднання пройшло успішно
   socket.on('connect', () => {
@@ -128,7 +156,7 @@ onMounted(() => {
 
   // Коли стріляю Я
   socket.on('fire-result', ({ x, y, result, sunkCoords }) => {
-    console.log(`Сервер відповів: ${result}`); // <--- Подивись в консоль (F12)
+    console.log(`Сервер відповів: ${result}`);
 
     if (result === 'killed') {
       // Якщо вбили корабель - фарбуємо всі його частини
@@ -166,7 +194,7 @@ onMounted(() => {
     // 2. Якщо просто ВЛУЧАННЯ (але корабель ще живий)
     else if (result === 'hit') {
       playerBoard.value[y][x] = 2; // Малюємо червоний хрестик
-      playSound('hit');            // <-- ТЕПЕР ТУТ БУДЕ ПРАВИЛЬНИЙ ЗВУК (БУМ!)
+      playSound('hit');
     }
     // 3. Якщо ПРОМАХ
     else {
@@ -277,11 +305,24 @@ const fire = (x, y) => { // отримує координати клітинки
         <button class="btn" onclick="location.reload()">Зіграти ще раз</button>
       </div>
     </div>
+
+    <div class="chat-container">
+      <h3>Чат</h3>
+      <div class="chat-window" ref="chatWindowRef">
+        <div v-for="(msg, index) in chatMessages" :key="index" class="message"
+          :class="{ 'my-message': msg.isMe, 'opponent-message': !msg.isMe }">
+          {{ msg.text }}
+        </div>
+      </div>
+      <div class="chat-input">
+        <input v-model="newMessage" @keyup.enter="sendMessage" placeholder="Написати повідомлення..." />
+        <button @click="sendMessage">➤</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <style>
-/* Скидаємо стандартні відступи браузера */
 body,
 html,
 #app {
@@ -289,11 +330,11 @@ html,
   padding: 0;
   width: 100%;
   height: 100%;
+  overflow-x: hidden;
 }
 </style>
 
 <style scoped>
-/* --- ЗАГАЛЬНІ СТИЛІ --- */
 .game-container {
   font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   padding: 20px;
@@ -343,6 +384,90 @@ h3 {
   transform: scale(1.05);
 }
 
+/* --- СТИЛІ ЧАТУ --- */
+.chat-container {
+  margin-top: 30px;
+  width: 100%;
+  max-width: 300px;
+  /* Ширина чату */
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  border: 2px solid #90caf9;
+}
+
+.chat-container h3 {
+  background-color: #1565c0;
+  color: white;
+  margin: 0;
+  padding: 10px;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.chat-window {
+  height: 150px;
+  /* Висота вікна повідомлень */
+  overflow-y: auto;
+  /* Прокрутка */
+  padding: 15px;
+  background-color: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+
+.message {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 15px;
+  font-size: 0.9rem;
+  word-wrap: break-word;
+}
+
+/* Мої повідомлення (справа, сині) */
+.my-message {
+  align-self: flex-end;
+  background-color: #bbdefb;
+  color: #0d47a1;
+  border-bottom-right-radius: 2px;
+}
+
+/* Повідомлення ворога (зліва, білі) */
+.opponent-message {
+  align-self: flex-start;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-bottom-left-radius: 2px;
+}
+
+.chat-input {
+  display: flex;
+  border-top: 1px solid #ddd;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  outline: none;
+}
+
+.chat-input button {
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  padding: 0 20px;
+  cursor: pointer;
+  font-size: 1.2rem;
+}
+
+.chat-input button:hover {
+  background-color: #388e3c;
+}
+
 /* Кнопки */
 .controls {
   display: flex;
@@ -390,7 +515,7 @@ h3 {
   background-color: #388e3c;
 }
 
-/* --- ІГРОВІ ПОЛЯ --- */
+/* ігрові поля */
 .container {
   display: flex;
   justify-content: space-around;
