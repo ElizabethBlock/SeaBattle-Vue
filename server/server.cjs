@@ -74,6 +74,20 @@ function isLoser(board) {
 
 // --- ЛОГІКА SOCKET.IO ---
 io.on('connection', (socket) => {
+
+   // --- ЧАТ ---
+   socket.on('chat-message', (text) => {
+      const room = socket.data.room;
+      // Відправляємо повідомлення в кімнату. 
+      // Додаємо senderId, щоб клієнт знав, чиє це повідомлення (моє чи ворога)
+      if (room) {
+         io.to(room).emit('chat-message', { 
+            text: text, 
+            senderId: socket.id 
+            
+         });
+      }
+   });
    console.log('Підключився гравець:', socket.id); // <--- ЦЕ МИ МАЄМО ПОБАЧИТИ В ЛОГАХ
 
    if (waitingPlayer) {
