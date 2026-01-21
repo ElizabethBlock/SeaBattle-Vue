@@ -706,4 +706,89 @@ h3 {
     opacity: 1;
   }
 }
+
+/* --- АДАПТИВНІСТЬ (MOBILE) --- */
+@media (max-width: 768px) {
+
+  /* 1. Змінюємо розташування блоків */
+  .game-container {
+    padding: 10px;
+    height: auto;
+    /* Дозволяємо скролити на телефоні */
+  }
+
+  .container {
+    flex-direction: column;
+    /* Поля стають одне під одним */
+    align-items: center;
+    gap: 20px;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+    /* Зменшуємо заголовок */
+  }
+
+  /* 2. Зменшуємо розмір клітинок, щоб влізло в екран */
+  .cell {
+    width: 28px;
+    /* Було 35px */
+    height: 28px;
+  }
+
+  /* Корегуємо розмір хрестиків і крапок під нові клітинки */
+  .miss::after {
+    font-size: 20px;
+    /* Трохи менша крапка */
+  }
+
+  .hit::after {
+    font-size: 16px;
+    /* Трохи менший хрестик */
+  }
+
+  .killed::after {
+    font-size: 26px;
+    /* Трохи менший великий хрест */
+  }
+
+  /* 3. Адаптуємо Чат */
+  .chat-container {
+    width: 100%;
+    /* Чат на всю ширину */
+    max-width: 320px;
+    /* Але не ширше полів */
+    margin-top: 20px;
+  }
+
+  .chat-window {
+    height: 150px;
+    /* Трохи нижче вікно на телефоні */
+  }
+
+  /* 4. Кнопки робимо зручнішими для пальців */
+  .controls {
+    flex-direction: column;
+    /* Кнопки одна під одною */
+    width: 100%;
+    gap: 10px;
+  }
+
+  .btn {
+    width: 100%;
+    /* Кнопка на всю ширину для зручного натискання */
+    padding: 15px;
+  }
+
+  /* 5. Статус панель компактніша */
+  .status-panel {
+    min-width: auto;
+    width: 100%;
+    padding: 10px;
+  }
+
+  h2 {
+    font-size: 1.1rem;
+  }
+}
 </style>
