@@ -36,7 +36,7 @@ const sendMessage = () => {
   newMessage.value = ''; // Очищаємо поле вводу
 };
 
-const status = ref('Підключення...');
+const status = ref('Connecting...');
 const gameStage = ref('waiting'); // спочатку показує waiting -> setup -> playing -> finished
 const playerBoard = ref([]); // моя карта бою з порожніми масивами
 const enemyBoard = ref([]); // ворожа карта бою з порожніми масивами
@@ -45,6 +45,7 @@ const isReady = ref(false); // чи натиснула я кнопку 'гото
 const winner = ref(null); // null, 'ME', 'ENEMY'
 // const socket = io();  підключення до сервера (тут IP мого локального сервера)
 const createEmptyBoard = () => Array(10).fill().map(() => Array(10).fill(0)); // функція створення сітки 10х10. Масив масивів, поки що заповнених нулями
+const isSoundOn = ref(true);
 const audioFiles = {
   useron: new Audio('/sounds/userOn.mp3'),
   go: new Audio('/sounds/go.mp3'),
@@ -56,6 +57,9 @@ const audioFiles = {
   allShip: new Audio('/sounds/allShip.mp3'),
   sent: new Audio('/sounds/sent.mp3'),
   accept: new Audio('/sounds/accept.mp3'),
+};
+const toggleSound = () => {
+  isSoundOn.value = !isSoundOn.value;
 };
 
 watch(chatMessages, async () => {
@@ -70,6 +74,7 @@ watch(chatMessages, async () => {
 
 // функція для програвання
 const playSound = (name) => {
+  if (!isSoundOn.value) return; // Якщо звук вимкнено — нічого не робимо
   const sound = audioFiles[name];
   if (sound) {
     sound.currentTime = 0; // перемотати на початок (якщо звук ще грає)
@@ -148,15 +153,15 @@ onMounted(() => {
     isMyTurn.value = data.turn;
 
     if (isMyTurn.value) {
-      status.value = "Бій почався! Твій хід!";
+      status.value = "The battle has begun! It's your turn";
     } else {
-      status.value = "Бій почався! Хід суперника.";
+      status.value = "The battle has begun! It's the opponent's turn.";
     }
   });
 
   // Коли стріляю Я
   socket.on('fire-result', ({ x, y, result, sunkCoords }) => {
-    console.log(`Сервер відповів: ${result}`);
+    console.log(`Server responded: ${result}`);
 
     if (result === 'killed') {
       // Якщо вбили корабель - фарбуємо всі його частини
@@ -165,18 +170,18 @@ onMounted(() => {
         playSound('allShip');
       });
       markSurrounding(enemyBoard.value, sunkCoords);
-      status.value = "КОРАБЕЛЬ ЗНИЩЕНО! Стріляй ще!";
+      status.value = "SHIP DESTROYED! Shoot again!";
     }
     else if (result === 'hit') {
       // Звичайне влучання
       enemyBoard.value[y][x] = 2; // 2 = HIT
-      status.value = "Влучила! Стріляй ще!";
+      status.value = "Hit! Shoot again!";
       playSound('hit');
     }
     else {
       // Промах
       enemyBoard.value[y][x] = 3; // 3 = MISS
-      status.value = "Промах...";
+      status.value = "Miss...";
       playSound('miss');
     }
   });
@@ -205,7 +210,7 @@ onMounted(() => {
 
   socket.on('turn-change', (myTurn) => {
     isMyTurn.value = myTurn;
-    status.value = myTurn ? "Твій хід!" : "Хід суперника...";
+    status.value = myTurn ? "Your turn!" : "Opponent's turn...";
   });
 
   socket.on('game-over', (data) => {
@@ -214,11 +219,11 @@ onMounted(() => {
     // Перевіряємо, чий ID прийшов як переможець
     if (data.winner === socket.id) {
       winner.value = 'ME';
-      status.value = "ПЕРЕМОГА!";
+      status.value = "WINNER";
       playSound('win');
     } else {
       winner.value = 'ENEMY';
-      status.value = "ТИ ПРОГРАЛА...";
+      status.value = "YOU LOST...";
       playSound('lose');
     }
   });
@@ -255,20 +260,24 @@ const fire = (x, y) => { // отримує координати клітинки
 
 <template>
   <div class="game-container">
-    <h1>Sea Battle: Online</h1>
+    <button class="sound-control" @click="toggleSound" :title="isSoundOn ? 'Вимкнути звук' : 'Увімкнути звук'">
+      <span v-if="isSoundOn">🔊</span>
+      <span v-else>🔇</span>
+    </button>
+    <h1>Sea Battle: online</h1>
 
     <div class="status-panel" :class="{ 'active-turn': isMyTurn && gameStage === 'playing' }">
       <h2>{{ status }}</h2>
     </div>
 
     <div v-if="gameStage === 'setup'" class="controls">
-      <button @click="randomizeShips" :disabled="isReady" class="btn random">Перемішати</button>
-      <button @click="confirmShips" :disabled="isReady" class="btn ready">Готовий до бою!</button>
+      <button @click="randomizeShips" :disabled="isReady" class="btn random">Mix</button>
+      <button @click="confirmShips" :disabled="isReady" class="btn ready">Ready for battle!</button>
     </div>
 
     <div class="container">
       <div class="board-block">
-        <h3>Мій флот</h3>
+        <h3>My fleet</h3>
         <div class="board">
           <div v-for="(row, y) in playerBoard" :key="y" class="row">
             <div v-for="(cell, x) in row" :key="x" class="cell" :class="{
@@ -282,7 +291,7 @@ const fire = (x, y) => { // отримує координати клітинки
       </div>
 
       <div class="board-block" v-if="gameStage === 'playing'">
-        <h3>Ворожі води</h3>
+        <h3>Enemy waters</h3>
         <div class="board enemy-board" :class="{ 'disabled': !isMyTurn }">
           <div v-for="(row, y) in enemyBoard" :key="y" class="row">
             <div v-for="(cell, x) in row" :key="x" class="cell" :class="{
@@ -296,18 +305,18 @@ const fire = (x, y) => { // отримує координати клітинки
     </div>
     <div v-if="gameStage === 'finished'" class="modal-overlay">
       <div class="modal-content" :class="{ 'win': winner === 'ME', 'lose': winner === 'ENEMY' }">
-        <h1 v-if="winner === 'ME'">ТИ ПЕРЕМОГЛА!</h1>
-        <h1 v-else>ТИ ПРОГРАЛА</h1>
+        <h1 v-if="winner === 'ME'">WINNER</h1>
+        <h1 v-else>LOSE</h1>
 
-        <p v-if="winner === 'ME'">Всі ворожі кораблі знищено!</p>
-        <p v-else>Твій флот пішов на дно.</p>
+        <p v-if="winner === 'ME'">All enemy ships destroyed!</p>
+        <p v-else>Your fleet has sunk</p>
 
-        <button class="btn" onclick="location.reload()">Зіграти ще раз</button>
+        <button class="btn" onclick="location.reload()">Play again</button>
       </div>
     </div>
 
     <div class="chat-container">
-      <h3>Чат</h3>
+      <h3>Chat</h3>
       <div class="chat-window" ref="chatWindowRef">
         <div v-for="(msg, index) in chatMessages" :key="index" class="message"
           :class="{ 'my-message': msg.isMe, 'opponent-message': !msg.isMe }">
@@ -315,7 +324,7 @@ const fire = (x, y) => { // отримує координати клітинки
         </div>
       </div>
       <div class="chat-input">
-        <input v-model="newMessage" @keyup.enter="sendMessage" placeholder="Написати повідомлення..." />
+        <input v-model="newMessage" @keyup.enter="sendMessage" placeholder="Write a message..." />
         <button @click="sendMessage">➤</button>
       </div>
     </div>
@@ -334,6 +343,7 @@ html,
 }
 </style>
 
+/*
 <style scoped>
 .game-container {
   font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -398,7 +408,7 @@ h3 {
 }
 
 .chat-container h3 {
-  background-color: #1565c0;
+  background-color: #525f6d;
   color: white;
   margin: 0;
   padding: 10px;
@@ -443,23 +453,22 @@ h3 {
   border-bottom-left-radius: 2px;
 }
 
-.chat-input {
-  display: flex;
-  border-top: 1px solid #ddd;
-}
+/* --- СТИЛІ ЧАТУ (Оновлено) --- */
 
 .chat-input input {
   flex: 1;
-  padding: 12px;
+  padding: 10px;
   border: none;
   outline: none;
+  font-size: 16px;
+  background-color: #fff;
 }
 
 .chat-input button {
   background-color: #4caf50;
   color: white;
   border: none;
-  padding: 0 20px;
+  padding: 0 15px;
   cursor: pointer;
   font-size: 1.2rem;
 }
@@ -695,6 +704,134 @@ h3 {
   color: #2c3e50;
 }
 
+.sound-control {
+  position: absolute;
+  /* Фіксуємо в кутку контейнера */
+  top: 20px;
+  right: 20px;
+
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  /* Робимо круглою */
+
+  background: rgba(0, 0, 0, 0.4);
+  /* Напівпрозорий темний фон */
+  border: 1px solid var(--accent-gold);
+  /* Золота рамка */
+  color: var(--text-primary);
+
+  font-size: 1.5rem;
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  transition: all 0.3s ease;
+  z-index: 10;
+  /* Щоб була поверх усього */
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.sound-control:hover {
+  background: var(--bg-panel);
+  box-shadow: 0 0 15px var(--accent-gold);
+  /* Золоте світіння при наведенні */
+  transform: scale(1.1);
+}
+
+.sound-control:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 768px) {
+
+  .game-container {
+    padding: 10px;
+    overflow-x: hidden;
+    width: 100vw;
+    box-sizing: border-box;
+  }
+
+  .container {
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    /* Зменшили відступ між полями */
+    width: 100%;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    /* Ще компактніший заголовок */
+    margin-bottom: 10px;
+  }
+
+  /* Зменшуємо клітинки, щоб поля точно влізли */
+  .cell {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* Корегуємо розмір маркерів */
+  .miss::after {
+    font-size: 20px;
+  }
+
+  .hit::after {
+    font-size: 16px;
+  }
+
+  .killed::after {
+    font-size: 26px;
+  }
+
+  .chat-container {
+    margin-top: 15px;
+    box-sizing: border-box;
+  }
+
+  .chat-window {
+    height: 110px;
+  }
+
+  /* Повертаємо кнопки в рядок, щоб вони не з'їдали висоту екрана */
+  .controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 8px;
+    margin-bottom: 15px;
+  }
+
+  .btn {
+    flex: 1;
+    /* Кнопки ділять ширину порівну */
+    padding: 12px 10px;
+    /* Менші відступи */
+    font-size: 14px;
+    /* Компактніший шрифт */
+    white-space: nowrap;
+    /* Текст в один рядок */
+  }
+
+  .status-panel {
+    padding: 10px;
+    margin-bottom: 15px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sound-control {
+    top: 15px;
+    right: 15px;
+    width: 40px;
+    height: 40px;
+    font-size: 1.2rem;
+  }
+}
+
 @keyframes popIn {
   0% {
     transform: scale(0.5);
@@ -704,91 +841,6 @@ h3 {
   100% {
     transform: scale(1);
     opacity: 1;
-  }
-}
-
-/* --- АДАПТИВНІСТЬ (MOBILE) --- */
-@media (max-width: 768px) {
-
-  /* 1. Змінюємо розташування блоків */
-  .game-container {
-    padding: 10px;
-    height: auto;
-    /* Дозволяємо скролити на телефоні */
-  }
-
-  .container {
-    flex-direction: column;
-    /* Поля стають одне під одним */
-    align-items: center;
-    gap: 20px;
-  }
-
-  h1 {
-    font-size: 1.8rem;
-    /* Зменшуємо заголовок */
-  }
-
-  /* 2. Зменшуємо розмір клітинок, щоб влізло в екран */
-  .cell {
-    width: 28px;
-    /* Було 35px */
-    height: 28px;
-  }
-
-  /* Корегуємо розмір хрестиків і крапок під нові клітинки */
-  .miss::after {
-    font-size: 20px;
-    /* Трохи менша крапка */
-  }
-
-  .hit::after {
-    font-size: 16px;
-    /* Трохи менший хрестик */
-  }
-
-  .killed::after {
-    font-size: 26px;
-    /* Трохи менший великий хрест */
-  }
-
-  /* 3. Адаптуємо Чат */
-  .chat-container {
-    width: 100%;
-    /* Чат на всю ширину */
-    max-width: 320px;
-    /* Але не ширше полів */
-    margin-top: 20px;
-  }
-
-  .chat-window {
-    height: 150px;
-    /* Трохи нижче вікно на телефоні */
-  }
-
-  /* 4. Кнопки робимо зручнішими для пальців */
-  .controls {
-    flex-direction: column;
-    /* Кнопки одна під одною */
-    width: 100%;
-    gap: 10px;
-  }
-
-  .btn {
-    width: 100%;
-    /* Кнопка на всю ширину для зручного натискання */
-    padding: 15px;
-  }
-
-  /* 5. Статус панель компактніша */
-  .status-panel {
-    min-width: auto;
-    width: 100%;
-    padding: 10px;
-  }
-
-  h2 {
-    font-size: 1.1rem;
   }
 }
 </style>

@@ -84,11 +84,11 @@ io.on('connection', (socket) => {
          io.to(room).emit('chat-message', { 
             text: text, 
             senderId: socket.id 
-            
+
          });
       }
    });
-   console.log('Підключився гравець:', socket.id); // <--- ЦЕ МИ МАЄМО ПОБАЧИТИ В ЛОГАХ
+   console.log('Player connected:', socket.id); // <--- ЦЕ МИ МАЄМО ПОБАЧИТИ В ЛОГАХ
 
    if (waitingPlayer) {
       const player1 = waitingPlayer;
@@ -102,12 +102,12 @@ io.on('connection', (socket) => {
       player1.data = { room: roomName, opponent: player2.id, ready: false };
       player2.data = { room: roomName, opponent: player1.id, ready: false };
 
-      io.to(roomName).emit('status-update', 'Суперника знайдено. Розстав кораблі!');
+      io.to(roomName).emit('status-update', 'Opponent found. Deploy ships!');
       io.to(roomName).emit('setup-phase');
 
    } else {
       waitingPlayer = socket;
-      socket.emit('status-update', 'Чекаємо на суперника...');
+      socket.emit('status-update', 'Waiting for opponent...');
    }
 
    socket.on('player-ready', (myShipsMatrix) => {
@@ -120,7 +120,7 @@ io.on('connection', (socket) => {
           socket.emit('game-start', { turn: p1Starts });
           opponentSocket.emit('game-start', { turn: !p1Starts });
       } else {
-          socket.emit('status-update', 'Чекаємо, поки суперник розставить кораблі...');
+          socket.emit('status-update', 'Waiting for opponent to place ships...');
       }
    });
 
@@ -167,7 +167,7 @@ io.on('connection', (socket) => {
    });
 
    socket.on('disconnect', () => {
-       console.log('Гравець відключився:', socket.id);
+       console.log('Player disconnected:', socket.id);
        if (waitingPlayer === socket) waitingPlayer = null;
        if (socket.data.room) {
            socket.to(socket.data.room).emit('game-over', { winner: 'OPPONENT_LEFT' }); 
