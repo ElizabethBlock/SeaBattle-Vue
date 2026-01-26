@@ -343,7 +343,6 @@ html,
 }
 </style>
 
-/*
 <style scoped>
 .game-container {
   font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
