@@ -29,7 +29,10 @@ const enemyBoard = ref([]); // ворожа карта бою з порожні�
 const isMyTurn = ref(false); // показує, чи мій зараз хід
 const isReady = ref(false); // чи натиснула я кнопку 'готовий'
 const winner = ref(null); // null, 'ME', 'ENEMY'
+const hitStatus = ref(null); // 'hit', 'killed' або null
+const isFiringBlocked = ref(false); // за замовчуванням стрільба дозволена
 const isSoundOn = ref(true);
+let hitStatusTimer = null; // тут ми будемо тримати "пульт керування" таймером
 
 // Чат живе тут (масив повідомлень)
 const chatMessages = ref([]);
@@ -59,7 +62,7 @@ const playSound = (name) => {
   const sound = audioFiles[name];
   if (sound) {
     sound.currentTime = 0; // перемотати на початок (якщо звук ще грає)
-    sound.play().catch(err => console.log("Браузер заблокував звук:", err));
+    sound.play().catch(err => console.log("Browser blocked sound:", err));
   }
 };
 
@@ -109,16 +112,16 @@ onMounted(() => {
 
   // Якщо з'єднання пройшло успішно
   socket.on('connect', () => {
-    console.log("Успішне з'єднання з ID:", socket.id);
-    if (status.value.includes('помилка')) {
-      status.value = "З'єднано! Чекаємо на дані гри...";
+    console.log("Successful connection with ID:", socket.id);
+    if (status.value.includes('error')) {
+      status.value = "Connected! Waiting for game data...";
     }
   });
 
   // Якщо сталася помилка з'єднання
   socket.on('connect_error', (err) => {
-    console.error("Помилка з'єднання:", err);
-    status.value = "Помилка з'єднання: " + err.message;
+    console.error("Connection error:", err);
+    status.value = "Connection error: " + err.message;
   });
 
   socket.on('status-update', (msg) => status.value = msg);
@@ -146,42 +149,80 @@ onMounted(() => {
   socket.on('fire-result', ({ x, y, result, sunkCoords }) => {
     console.log(`Server responded: ${result}`);
 
+    // 1. Очищуємо старий таймер, якщо він є
+    if (hitStatusTimer) clearTimeout(hitStatusTimer);
+
     if (result === 'killed') {
       sunkCoords.forEach(coord => {
-        enemyBoard.value[coord.y][coord.x] = 4; // 4 = KILLED
-        playSound('allShip');
+        enemyBoard.value[coord.y][coord.x] = 4;
       });
       markSurrounding(enemyBoard.value, sunkCoords);
-      status.value = "SHIP DESTROYED! Shoot again!";
+      playSound('allShip');
+
+      // Встановлюємо статус успіху (знищення)
+      hitStatus.value = 'success-killed';
     }
     else if (result === 'hit') {
-      enemyBoard.value[y][x] = 2; // 2 = HIT
-      status.value = "Hit! Shoot again!";
+      enemyBoard.value[y][x] = 2;
       playSound('hit');
+
+      // Встановлюємо статус успіху (влучання)
+      hitStatus.value = 'success-hit';
     }
     else {
-      enemyBoard.value[y][x] = 3; // 3 = MISS
-      status.value = "Miss...";
+      enemyBoard.value[y][x] = 3;
+      status.value = "Miss..."; // Для промаху залишаємо звичайний статус
       playSound('miss');
+      hitStatus.value = null; // Прибираємо кольорову плашку, якщо вона була
     }
+
+    // 2. Якщо було влучання або вбивство — запускаємо таймер на 5 секунд
+    if (result === 'hit' || result === 'killed') {
+      hitStatusTimer = setTimeout(() => {
+        hitStatus.value = null;
+        hitStatusTimer = null;
+        // Тільки після 5 секунд повертаємо текст про хід
+        status.value = "Your turn! Shoot again!";
+      }, 5000);
+    }
+
+    setTimeout(() => {
+      isFiringBlocked.value = false;
+    }, 500);
   });
 
   // Коли стріляє ВОРОГ по мені
   socket.on('enemy-fire', ({ x, y, result, sunkCoords }) => {
+    // 1. Очищуємо старий таймер
+    if (hitStatusTimer) clearTimeout(hitStatusTimer);
+
     if (result === 'killed') {
-      sunkCoords.forEach(coord => {
-        playerBoard.value[coord.y][coord.x] = 4;
-      });
+      playerBoard.value[y][x] = 4;
+      sunkCoords.forEach(coord => playerBoard.value[coord.y][coord.x] = 4);
       markSurrounding(playerBoard.value, sunkCoords);
       playSound('allShip');
+
+      hitStatus.value = 'killed';
     }
     else if (result === 'hit') {
       playerBoard.value[y][x] = 2;
       playSound('hit');
+
+      hitStatus.value = 'hit';
     }
     else {
+      // Якщо ворог промахнувся, можна прибрати червону плашку (якщо вона висіла від минулого разу)
       playerBoard.value[y][x] = 3;
       playSound('miss');
+      hitStatus.value = null;
+    }
+
+    // 2. Запускаємо новий таймер на 5 секунд
+    if (result === 'hit' || result === 'killed') {
+      hitStatusTimer = setTimeout(() => {
+        hitStatus.value = null;
+        hitStatusTimer = null;
+      }, 5000);
     }
   });
 
@@ -216,7 +257,7 @@ const randomizeShips = (silent = false) => {
 // кнопка 'готова до бою'
 const confirmShips = () => {
   isReady.value = true;
-  status.value = "Чекаю на готовність суперника...";
+  status.value = "Waiting for opponent's readiness...";
   socket.emit('player-ready', playerBoard.value);
   playSound('go');
 };
@@ -226,20 +267,31 @@ const fire = (x, y) => {
   if (gameStage.value !== 'playing') return;
   if (!isMyTurn.value) return;
   if (enemyBoard.value[y][x] !== 0) return;
+  if (isFiringBlocked.value) return;
   socket.emit('fire', { x, y });
+  isFiringBlocked.value = true;
 }
 </script>
 
 <template>
   <div class="game-container">
-    <button class="sound-control" @click="toggleSound" :title="isSoundOn ? 'Вимкнути звук' : 'Увімкнути звук'">
+    <button class="sound-control" @click="toggleSound" :title="isSoundOn ? 'Turn off sound' : 'Turn on sound'">
       <span v-if="isSoundOn">🔊</span>
       <span v-else>🔇</span>
     </button>
     <h1>Sea Battle: online</h1>
 
-    <div class="status-panel" :class="{ 'active-turn': isMyTurn && gameStage === 'playing' }">
-      <h2>{{ status }}</h2>
+    <div class="status-panel" :class="{
+      'active-turn': isMyTurn && gameStage === 'playing',
+      'status-hit': hitStatus === 'hit',
+      'status-killed': hitStatus === 'killed',
+      'status-success': hitStatus === 'success-hit' || hitStatus === 'success-killed'
+    }">
+      <h2 v-if="hitStatus === 'hit'">YOU'RE HIT!</h2>
+      <h2 v-else-if="hitStatus === 'killed'">YOUR SHIP DESTROYED!</h2>
+      <h2 v-else-if="hitStatus === 'success-hit'">NICE SHOT!</h2>
+      <h2 v-else-if="hitStatus === 'success-killed'">ENEMY SHIP SUNK!</h2>
+      <h2 v-else>{{ status }}</h2>
     </div>
 
     <div v-if="gameStage === 'setup'" class="controls">

@@ -49,6 +49,21 @@ h3 {
   transition: all 0.3s ease;
 }
 
+.status-hit {
+  background-color: #a54d0f;
+  color: #a67d7d;
+  border: 1px solid #e2bcbc;
+  animation: shake 1s ease-in-out;
+}
+
+.status-killed {
+  background-color: #d12626;
+  color: #7d5a5a;
+  border: 2px solid #c9b4b4;
+  box-shadow: 0 4px 12px rgba(166, 125, 125, 0.2);
+  animation: shake 1s ease-in-out;
+}
+
 .active-turn {
   background-color: #2d6131;
   color: #2e7d32;
@@ -297,6 +312,12 @@ h3 {
     transform: scale(1);
     opacity: 1;
   }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
 }
 
 @media (max-width: 768px) {
