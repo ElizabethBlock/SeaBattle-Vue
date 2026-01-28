@@ -136,7 +136,7 @@ onMounted(() => {
     }
   });
 
-  // Коли стріляю я по ворогу
+  // Коли стріляю я
   socket.on('fire-result', ({ x, y, result, sunkCoords }) => {
     console.log(`Server responded: ${result}`);
 
