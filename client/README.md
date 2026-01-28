@@ -1,45 +1,92 @@
-# client
+# Sea Battle - онлайн гра в на Vue 3 та WebSockets
 
-This template should help get you started developing with Vue 3 in Vite.
+Пет-проєкт: багатокористувацька онлайн-гра 'Морський бій' з реалізацією реального часу.
 
-## Recommended IDE Setup
+![Project Status](https://img.shields.io/badge/Status-In_Development-yellow)
+![License](https://img.shields.io/badge/License-MIT-blue)
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+## Про проєкт
 
-## Recommended Browser Setup
+Це класична гра "Морський бій", перенесена у веб-формат. Головна мета проєкту — розібратися з технологіями **Vue 3** та **WebSockets**, а також реалізувати повноцінну взаємодію між клієнтом та сервером.
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+Гра дозволяє двом гравцям підключатися до сервера та грати один проти одного в режимі реального часу.
 
-## Customize configuration
+## Технологічний стек
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+**Frontend:**
+* **Vue 3** (Composition API, `<script setup>`) — для побудови інтерфейсу та реактивності.
+* **HTML5 / CSS3** — семантична верстка та стилізація.
+* **JavaScript (ES6+)** — логіка гри на клієнті.
 
-## Project Setup
+**Backend:**
+* **Node.js** — середовище виконання.
+* **Express** — веб-сервер.
+* **Socket.io** — бібліотека для реалізації двостороннього зв'язку між гравцями.
+* *(Можна додати, якщо вже реалізувала або в процесі)* **SQLite** — база даних для збереження статистики ігор.
 
-```sh
-npm install
+## ✨ Функціонал
+
+* Розміщення кораблів на полі кліком.
+* Підключення двох гравців через WebSocket.
+* Синхронізація ходів у реальному часі.
+* Відображення влучень та промахів.
+* Визначення переможця.
+* Чат для гравців.
+* (В планах) Збереження історії матчів.
+
+
+## Деталі реалізації та правила (Game Mechanics & Logic)
+
+Проєкт відтворює повний цикл класичної гри "Морський бій" у браузері.
+
+### Логіка гри
+1.  **Lobby / Підключення:** Користувач заходить на сайт і автоматично з'єднується з сервером через WebSocket.
+2.  **Автоматична розстановка (Setup Phase):**
+    * Гравцю доступний набір кораблів (1x4, 2x3, 3x2, 4x1).
+    * Реалізована логіка перевірки валідності координат: кораблі не можуть виходити за межі поля 10x10 або торкатися один одного (правило 'ореолу').
+3.  **Бій (Battle Phase):**
+    * Гра починається, коли обидва гравці натиснули 'Ready'.
+    * Реалізовано чергування ходів з затримкою в кілька секунд (Turn-based logic).
+    * При влучанні хід залишається у гравця.
+4.  **Фінал:** Гра оголошує переможця, коли всі 20 'палуб' супротивника знищені.
+
+### Архітектура та Технічні рішення
+
+Головним викликом проєкту була синхронізація стану гри між двома клієнтами в реальному часі.
+
+**Frontend (Vue 3 Composition API):**
+* Використано **Reactive State** (`ref`, `reactive`) для миттєвого відображення змін на полі бою (постріли, влучання, промахи).
+* Логіка відокремлена від шаблону (Template) завдяки `<script setup>`, що робить код чистим і підтримуваним.
+* Компонентний підхід: поле гравця та поле супротивника — це перевикористовувані компоненти.
+
+**Backend (Node.js + Socket.io):**
+* Сервер виступає джерелом істини (Single Source of Truth).
+* Використовується подієва модель (**Event-driven architecture**).
+    * `client -> server`: відправка координат пострілу (`shoot`).
+    * `server -> client`: повернення результату (`hit`, `miss`, `sunk`).
+* Це запобігає чітерству на клієнті, оскільки перевірка влучання відбувається на стороні сервера.
+
+
+## Як запустити проєкт
+
+Щоб запустити гру локально, виконайте наступні кроки:
+
+  1. Клонування репозиторію
+```bash
+git clone https://github.com/ElizabethBlock/SeaBattle-Vue.git
+cd SeaBattle-Vue
 ```
 
-### Compile and Hot-Reload for Development
+  2. Запуск Сервера (Backend)
+```bash
+cd server
+npm install
+npm start
+```
 
-```sh
+  3. Запуск Клієнта (Frontend)
+```bash
+cd client
+npm install
 npm run dev
 ```
-
-### Compile and Minify for Production
-
-```sh
-npm run build
-```
-
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-npm run lint
-```
-# SeaBattle-Vue

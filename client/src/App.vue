@@ -4,19 +4,12 @@ import { io } from "socket.io-client"; // імпортую бібліотеку 
 import { generateShips } from './shipGenerator'; // імпортую генератор кораблів зі свого файлу
 import GameChat from './components/GameChat.vue'; // імпортую компонент чату
 
-// підключення до локального сервера і до хостингу Render.com
-// 1. Отримуємо адресу, на якій відкрито сайт (localhost, 192.168.x.x або onrender.com)
-const hostname = window.location.hostname;
-const protocol = window.location.protocol;
+const hostname = window.location.hostname;// підключення до локального сервера і до хостингу Render.com
+const protocol = window.location.protocol;// отримую адресу, на якій відкрито сайт (localhost, 192.168.x.x або onrender.com)
+const isProduction = hostname.includes('onrender.com'); // перевіряю, чи ми на Render (у продакшні)
+const socketUrl = isProduction ? undefined : `${protocol}//${hostname}:4000`;// формую адресу для Socket.io. Якщо render -> undefined (автоматично). Якщо дім (Wi-Fi/Localhost) -> беремо ТОЙ САМИЙ IP, але стукаємо в порт 4000
 
-// 2. Перевіряємо, чи ми на Render (у продакшні)
-const isProduction = hostname.includes('onrender.com');
-
-// 3. Формуємо адресу для Socket.io
-// Якщо render -> undefined (автоматично)
-// Якщо дім (Wi-Fi/Localhost) -> беремо ТОЙ САМИЙ IP, але стукаємо в порт 4000
-const socketUrl = isProduction ? undefined : `${protocol}//${hostname}:4000`;
-
+// підключення двох способів зв'язку. Вебсокети (миттєві повідомлення) і полінг (резервний варіант, браузер почне дуже часто питати сервер про новини, при поганому інтернеті)
 const socket = io(socketUrl, {
   transports: ['websocket', 'polling'],
   reconnection: true
@@ -31,13 +24,10 @@ const isReady = ref(false); // чи натиснула я кнопку 'гото
 const winner = ref(null); // null, 'ME', 'ENEMY'
 const hitStatus = ref(null); // 'hit', 'killed' або null
 const isFiringBlocked = ref(false); // за замовчуванням стрільба дозволена
-const isSoundOn = ref(true);
-let hitStatusTimer = null; // тут ми будемо тримати "пульт керування" таймером
-
-// Чат живе тут (масив повідомлень)
-const chatMessages = ref([]);
-
+const isSoundOn = ref(true); // звук увімкнено за замовчуванням
+const chatMessages = ref([]); // чат тут (масив повідомлень)
 const createEmptyBoard = () => Array(10).fill().map(() => Array(10).fill(0)); // функція створення сітки 10х10
+let hitStatusTimer = null; // тут ми будемо тримати "пульт керування" таймером
 
 const audioFiles = {
   useron: new Audio('/sounds/userOn.mp3'),
@@ -52,6 +42,7 @@ const audioFiles = {
   accept: new Audio('/sounds/accept.mp3'),
 };
 
+// функція для перемикання звуку
 const toggleSound = () => {
   isSoundOn.value = !isSoundOn.value;
 };
@@ -181,9 +172,9 @@ onMounted(() => {
       hitStatusTimer = setTimeout(() => {
         hitStatus.value = null;
         hitStatusTimer = null;
-        // Тільки після 5 секунд повертаємо текст про хід
+        // Тільки після 4 секунд повертаємо текст про хід
         status.value = "Your turn! Shoot again!";
-      }, 5000);
+      }, 4000);
     }
 
     setTimeout(() => {
@@ -217,12 +208,12 @@ onMounted(() => {
       hitStatus.value = null;
     }
 
-    // 2. Запускаємо новий таймер на 5 секунд
+    // 2. Запускаємо новий таймер на 4 секунди
     if (result === 'hit' || result === 'killed') {
       hitStatusTimer = setTimeout(() => {
         hitStatus.value = null;
         hitStatusTimer = null;
-      }, 5000);
+      }, 4000);
     }
   });
 
