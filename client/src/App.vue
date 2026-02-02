@@ -1,12 +1,12 @@
 <script setup>
-import { ref, onMounted } from 'vue'; // імпортую шнструменти з Vue. ref - для реактивних змінних, onMounted - для дій при монтуванні компонента
-import { io } from "socket.io-client"; // імпортую бібліотеку socket.io-client
-import { generateShips } from './shipGenerator'; // імпортую генератор кораблів зі свого файлу
-import GameChat from './components/GameChat.vue'; // імпортую компонент чату
+import { ref, onMounted } from 'vue'; // ref - для реактивних змінних, onMounted - для дій при монтуванні компонента
+import { io } from "socket.io-client";
+import { generateShips } from './shipGenerator';
+import GameChat from './components/GameChat.vue';
 
 const hostname = window.location.hostname;// підключення до локального сервера і до хостингу Render.com
-const protocol = window.location.protocol;// отримую адресу, на якій відкрито сайт (localhost, 192.168.x.x або onrender.com)
-const isProduction = hostname.includes('onrender.com'); // перевіряю, чи ми на Render (у продакшні)
+const protocol = window.location.protocol;// отримую адресу, на якій відкрито сайт (HTTP-локальний або HTTPS-хостинг)
+const isProduction = hostname.includes('onrender.com'); // перевірка чи ми на Render
 const socketUrl = isProduction ? undefined : `${protocol}//${hostname}:4000`;// формую адресу для Socket.io. Якщо render -> undefined (автоматично). Якщо дім (Wi-Fi/Localhost) -> беремо ТОЙ САМИЙ IP, але стукаємо в порт 4000
 
 // підключення двох способів зв'язку. Вебсокети (миттєві повідомлення) і полінг (резервний варіант, браузер почне дуже часто питати сервер про новини, при поганому інтернеті)
@@ -17,14 +17,14 @@ const socket = io(socketUrl, {
 
 const status = ref('Connecting...');
 const gameStage = ref('waiting'); // спочатку показує waiting -> setup -> playing -> finished
-const playerBoard = ref([]); // моя карта бою з порожніми масивами
-const enemyBoard = ref([]); // ворожа карта бою з порожніми масивами
-const isMyTurn = ref(false); // показує, чи мій зараз хід
-const isReady = ref(false); // чи натиснула я кнопку 'готовий'
-const winner = ref(null); // null, 'ME', 'ENEMY'
-const hitStatus = ref(null); // 'hit', 'killed' або null
-const isFiringBlocked = ref(false); // за замовчуванням стрільба дозволена
-const isSoundOn = ref(true); // звук увімкнено за замовчуванням
+const playerBoard = ref([]);
+const enemyBoard = ref([]);
+const isMyTurn = ref(false);
+const isReady = ref(false);
+const winner = ref(null);
+const hitStatus = ref(null);
+const isFiringBlocked = ref(false);
+const isSoundOn = ref(true);
 const chatMessages = ref([]); // чат тут (масив повідомлень)
 const createEmptyBoard = () => Array(10).fill().map(() => Array(10).fill(0)); // функція створення сітки 10х10
 let hitStatusTimer = null; // тут ми будемо тримати "пульт керування" таймером
@@ -42,14 +42,13 @@ const audioFiles = {
   accept: new Audio('/sounds/accept.mp3'),
 };
 
-// функція для перемикання звуку
 const toggleSound = () => {
   isSoundOn.value = !isSoundOn.value;
 };
 
-// функція для програвання
+// програвання
 const playSound = (name) => {
-  if (!isSoundOn.value) return; // Якщо звук вимкнено — нічого не робимо
+  if (!isSoundOn.value) return; // якщо звук вимкнено — нічого не робимо
   const sound = audioFiles[name];
   if (sound) {
     sound.currentTime = 0; // перемотати на початок (якщо звук ще грає)
@@ -57,24 +56,24 @@ const playSound = (name) => {
   }
 };
 
-// Функція обробки відправки повідомлення (викликається компонентом GameChat)
+// обробка відправки повідомлення (викликається компонентом GameChat)
 const handleSendMessage = (text) => {
   socket.emit('chat-message', text);
   playSound('accept');
 };
 
-// функція для автоматичного зафарбовування клітинок навколо вбитого корабля
+// автоматичне зафарбовування клітинок навколо вбитого корабля
 const markSurrounding = (board, sunkCoords) => {
   sunkCoords.forEach(coord => {
-    // Перебираємо всі 8 клітинок навколо кожної палуби
+    // перебір всіх 8 клітинок навколо кожної палуби
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         const ny = coord.y + dy;
         const nx = coord.x + dx;
 
-        // Перевіряємо, щоб не вилізти за межі карти (0-9)
+        // перевірка, щоб не вилізти за межі карти
         if (ny >= 0 && ny < 10 && nx >= 0 && nx < 10) {
-          // Якщо клітинка порожня (0) — ставимо "промах" (3)
+          // якщо клітинка порожня (0) — ставимо "промах" (3)
           if (board[ny][nx] === 0) {
             board[ny][nx] = 3;
           }
@@ -84,16 +83,16 @@ const markSurrounding = (board, sunkCoords) => {
   });
 };
 
-// створюю порожні ігрові поля
+// порожні ігрові поля
 playerBoard.value = createEmptyBoard();
 enemyBoard.value = createEmptyBoard();
 
 onMounted(() => {
-  // Коли приходить повідомлення чату
+  // коли приходить повідомлення чату
   socket.on('chat-message', ({ text, senderId }) => {
     chatMessages.value.push({
       text: text,
-      isMe: senderId === socket.id // Перевіряємо, чи це я написала
+      isMe: senderId === socket.id // перевіряємо, чи це я написала
     });
 
     if (senderId !== socket.id) {
@@ -101,7 +100,7 @@ onMounted(() => {
     }
   });
 
-  // Якщо з'єднання пройшло успішно
+  // якщо з'єднання пройшло успішно
   socket.on('connect', () => {
     console.log("Successful connection with ID:", socket.id);
     if (status.value.includes('error')) {
@@ -109,7 +108,7 @@ onMounted(() => {
     }
   });
 
-  // Якщо сталася помилка з'єднання
+  // якщо сталася помилка з'єднання
   socket.on('connect_error', (err) => {
     console.error("Connection error:", err);
     status.value = "Connection error: " + err.message;
@@ -117,14 +116,14 @@ onMounted(() => {
 
   socket.on('status-update', (msg) => status.value = msg);
 
-  // Етап розстановки
+  // етап розстановки
   socket.on('setup-phase', () => {
     gameStage.value = 'setup';
     playSound('useron');
-    randomizeShips(true); // Одразу даємо випадкову карту
+    randomizeShips(true); // одразу даємо випадкову карту
   });
 
-  // Етап гри
+  // етап гри
   socket.on('game-start', (data) => {
     gameStage.value = 'playing';
     isMyTurn.value = data.turn;
@@ -136,11 +135,11 @@ onMounted(() => {
     }
   });
 
-  // Коли стріляю я
+  // коли стріляю я
   socket.on('fire-result', ({ x, y, result, sunkCoords }) => {
     console.log(`Server responded: ${result}`);
 
-    // 1. Очищуємо старий таймер, якщо він є
+    // 1. очищуємо старий таймер, якщо він є
     if (hitStatusTimer) clearTimeout(hitStatusTimer);
 
     if (result === 'killed') {
@@ -150,29 +149,29 @@ onMounted(() => {
       markSurrounding(enemyBoard.value, sunkCoords);
       playSound('allShip');
 
-      // Встановлюємо статус успіху (знищення)
+      // встановлюю статус успіху (вбивство)
       hitStatus.value = 'success-killed';
     }
     else if (result === 'hit') {
       enemyBoard.value[y][x] = 2;
       playSound('hit');
 
-      // Встановлюємо статус успіху (влучання)
+      // встановлюємо статус успіху (влучання)
       hitStatus.value = 'success-hit';
     }
     else {
       enemyBoard.value[y][x] = 3;
-      status.value = "Miss..."; // Для промаху залишаємо звичайний статус
+      status.value = "Miss..."; // для промаху залишаємо звичайний статус
       playSound('miss');
-      hitStatus.value = null; // Прибираємо кольорову плашку, якщо вона була
+      hitStatus.value = null; // прибираємо кольорову плашку, якщо вона була
     }
 
-    // 2. Якщо було влучання або вбивство — запускаємо таймер на 5 секунд
+    // 2. якщо було влучання або вбивство — запускаємо таймер на 5 секунд
     if (result === 'hit' || result === 'killed') {
       hitStatusTimer = setTimeout(() => {
         hitStatus.value = null;
         hitStatusTimer = null;
-        // Тільки після 4 секунд повертаємо текст про хід
+        // тільки після 4 секунд повертаємо текст про хід
         status.value = "Your turn! Shoot again!";
       }, 4000);
     }
@@ -182,9 +181,9 @@ onMounted(() => {
     }, 500);
   });
 
-  // Коли стріляє ВОРОГ по мені
+  // коли стріляє ВОРОГ по мені
   socket.on('enemy-fire', ({ x, y, result, sunkCoords }) => {
-    // 1. Очищуємо старий таймер
+    // 1. очищуємо старий таймер
     if (hitStatusTimer) clearTimeout(hitStatusTimer);
 
     if (result === 'killed') {
@@ -202,13 +201,13 @@ onMounted(() => {
       hitStatus.value = 'hit';
     }
     else {
-      // Якщо ворог промахнувся, можна прибрати червону плашку (якщо вона висіла від минулого разу)
+      // якщо ворог промахнувся, можна прибрати червону плашку (якщо вона висіла від минулого разу)
       playerBoard.value[y][x] = 3;
       playSound('miss');
       hitStatus.value = null;
     }
 
-    // 2. Запускаємо новий таймер на 4 секунди
+    // 2. запускаємо новий таймер на 4 секунди
     if (result === 'hit' || result === 'killed') {
       hitStatusTimer = setTimeout(() => {
         hitStatus.value = null;
@@ -236,7 +235,7 @@ onMounted(() => {
   });
 });
 
-// кнопка 'перемішати кораблі'
+// btn 'перемішати кораблі'
 const randomizeShips = (silent = false) => {
   if (isReady.value) return;
   playerBoard.value = generateShips();
@@ -245,7 +244,7 @@ const randomizeShips = (silent = false) => {
   }
 };
 
-// кнопка 'готова до бою'
+// btn 'готова до бою'
 const confirmShips = () => {
   isReady.value = true;
   status.value = "Waiting for opponent's readiness...";
@@ -253,7 +252,7 @@ const confirmShips = () => {
   playSound('go');
 };
 
-// функція стрільби по ворожому полю
+// стрільба по ворожому полю
 const fire = (x, y) => {
   if (gameStage.value !== 'playing') return;
   if (!isMyTurn.value) return;
